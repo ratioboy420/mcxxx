@@ -3,10 +3,26 @@ from dhanhq import dhanhq
 
 @st.cache_resource
 def get_dhan_connection(client_id, access_token):
-    """Establishes a persistent connection to Dhan API"""
+    """Establishes a persistent connection to Dhan API adapting to any SDK version"""
     try:
-        # FIX: Parameter names explicitly define karne honge
-        return dhanhq(client_id=client_id, access_token=access_token)
+        # Attempt 1: Naye Dhan SDK version me shayad sirf access_token chahiye
+        try:
+            conn = dhanhq(access_token=access_token)
+            return conn
+        except TypeError:
+            pass
+        
+        # Attempt 2: Agar library 'clientcode' naam expect kar rahi ho
+        try:
+            conn = dhanhq(clientcode=client_id, access_token=access_token)
+            return conn
+        except TypeError:
+            pass
+
+        # Attempt 3: Purana standard tarika (Positional arguments)
+        conn = dhanhq(client_id, access_token)
+        return conn
+
     except Exception as e:
         st.error(f"Dhan Connection Error: {e}")
         return None
