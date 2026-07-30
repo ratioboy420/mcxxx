@@ -4,6 +4,7 @@ import sqlite3
 from views.add_pair import add_row_dialog
 from core.dhan_client import get_live_ltp
 from core.quant_math import calculate_spread_math
+from utils.instruments import get_security_token
 
 @st.fragment(run_every=5)
 def render_live_dashboard():
@@ -34,36 +35,51 @@ def render_live_dashboard():
             st.info("No active trades. Click 'AI Add Row' to generate a spread.")
             return
 
-        # 3. RENDER TRADES AS DYNAMIC BOXES (CARDS)
+        # 3. RENDER TRADES WITH REAL DYNAMIC DATA
         for index, row in df.iterrows():
-            # Create a card-like container for each pair
             with st.container():
                 c1, c2, c3, c4 = st.columns([3, 2, 2, 2])
+                
+                # Parsing string: "GOLD 05-Oct-2026/04-Dec-2026"
+                try:
+                    pair_parts = row['pair'].split(' ')
+                    metal = pair_parts[0]
+                    expiries = pair_parts[1].split('/')
+                    near_exp = expiries[0]
+                    far_exp = expiries[1]
+                except Exception:
+                    metal, near_exp, far_exp = "", "", ""
                 
                 with c1:
                     st.markdown(f"### {row['pair']}")
                     st.caption(f"Status: **{row['status']}** | Opened: {row['open_time']}")
                 
                 with c2:
-                    # Simulated Live Fetching & Math (Will be replaced with dynamic tokens next)
-                    # Yahan Near aur Far leg ka live price aayega
-                    near_live = 72500.0  
-                    far_live = 73000.0   
+                    # --- NO MORE MANUAL DATA: Fetching Real Dynamic Tokens ---
+                    near_token = get_security_token(metal, near_exp)
+                    far_token = get_security_token(metal, far_exp)
                     
+                    near_live = get_live_ltp(dhan_conn, near_token) if near_token else 0.0
+                    far_live = get_live_ltp(dhan_conn, far_token) if far_token else 0.0
+                    
+                    # Mathematical Calculation
                     live_spread, calc_target, calc_sl = calculate_spread_math(near_live, far_live, row['side'])
                     
-                    st.metric(label=f"Live Spread ({row['side']})", value=f"₹{live_spread}")
+                    if near_live == 0.0 or far_live == 0.0:
+                        st.error("Market Data Offline")
+                    else:
+                        st.metric(label=f"Live Spread ({row['side']})", value=f"₹{live_spread:,.2f}")
                 
                 with c3:
-                    st.metric(label="Target", value=f"₹{calc_target}")
-                    st.metric(label="Stop Loss", value=f"₹{calc_sl}")
+                    st.metric(label="Target", value=f"₹{calc_target:,.2f}")
+                    st.metric(label="Stop Loss", value=f"₹{calc_sl:,.2f}")
                     
                 with c4:
-                    # Dummy PnL logic for now
+                    # Future integration logic for P&L based on entry price
                     pnl = 0 
                     st.metric(label="Live P&L", value=f"₹{pnl}")
                 
-                st.markdown("---") # Box divider
+                st.markdown("---")
 
     except Exception as e:
         st.error(f"Error loading dashboard: {e}")
