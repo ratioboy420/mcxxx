@@ -17,10 +17,18 @@ with st.sidebar:
     
     if st.button("Connect"):
         if client_id and access_token:
-            st.session_state.dhan_conn = get_dhan_connection(client_id, access_token)
-            st.success("Connected to Dhan API!")
+            # Agar purana fail connection cache me hai, toh use hata do
+            st.cache_resource.clear()
+            
+            # Connection try karo
+            conn = get_dhan_connection(client_id, access_token)
+            
+            # Agar conn None nahi hai, tabhi Success dikhao!
+            if conn is not None:
+                st.session_state.dhan_conn = conn
+                st.success("Connected to Dhan API!")
         else:
-            st.error("Please enter credentials.")
+            st.warning("Please enter both credentials.")
 
 # --- RENDER DASHBOARD ---
 render_live_dashboard()
