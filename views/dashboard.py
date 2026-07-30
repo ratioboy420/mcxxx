@@ -5,6 +5,7 @@ from views.add_pair import add_row_dialog
 from core.dhan_client import get_live_ltp
 from core.quant_math import calculate_spread_math
 from utils.instruments import get_security_token
+from database import delete_trade  # Delete function import kiya gaya hai
 
 @st.fragment(run_every=5)
 def render_live_dashboard():
@@ -12,20 +13,20 @@ def render_live_dashboard():
     
     dhan_conn = st.session_state.get('dhan_conn')
     
-    # 1. HEADER BUTTONS
+    # 1. HEADER BUTTONS & API STATUS
     col1, col2 = st.columns([8, 2])
     with col1:
         if dhan_conn:
             st.success("🟢 Real-time Market Data Active")
         else:
-            st.warning("⚠️ Dhan API Not Connected. Please login from the sidebar.")
+            st.warning("⚠️ Dhan API Not Connected. Showing saved offline database trades.")
     with col2:
         if st.button("➕ AI Add Row", use_container_width=True):
             add_row_dialog()
             
     st.divider()
 
-    # 2. LOAD TRADES FROM DB
+    # 2. LOAD TRADES FROM DATABASE
     try:
         conn = sqlite3.connect('mcx_trades.db')
         df = pd.read_sql_query("SELECT * FROM trades", conn)
@@ -35,12 +36,12 @@ def render_live_dashboard():
             st.info("No active trades. Click 'AI Add Row' to generate a spread.")
             return
 
-        # 3. RENDER TRADES WITH REAL DYNAMIC DATA
+        # 3. RENDER DYNAMIC CARDS FOR EACH TRADE
         for index, row in df.iterrows():
             with st.container():
                 c1, c2, c3, c4 = st.columns([3, 2, 2, 2])
                 
-                # Parsing string: "GOLD 05-Oct-2026/04-Dec-2026"
+                # Pair string ko split karke extract kar rahe hain (e.g., "GOLD 05-Oct-2026/04-Dec-2026")
                 try:
                     pair_parts = row['pair'].split(' ')
                     metal = pair_parts[0]
@@ -53,16 +54,22 @@ def render_live_dashboard():
                 with c1:
                     st.markdown(f"### {row['pair']}")
                     st.caption(f"Status: **{row['status']}** | Opened: {row['open_time']}")
+                    
+                    # DELETE BUTTON LOGIC
+                    if st.button("🗑️ Delete Spread", key=f"del_{row['id']}"):
+                        delete_trade(row['id'])
+                        st.rerun() # Delete hone ke baad screen turant saaf ho jayegi
                 
                 with c2:
-                    # --- NO MORE MANUAL DATA: Fetching Real Dynamic Tokens ---
+                    # Dynamic Token Fetching
                     near_token = get_security_token(metal, near_exp)
                     far_token = get_security_token(metal, far_exp)
                     
+                    # Live Price Fetching
                     near_live = get_live_ltp(dhan_conn, near_token) if near_token else 0.0
                     far_live = get_live_ltp(dhan_conn, far_token) if far_token else 0.0
                     
-                    # Mathematical Calculation
+                    # Target, Stop Loss aur Spread calculation
                     live_spread, calc_target, calc_sl = calculate_spread_math(near_live, far_live, row['side'])
                     
                     if near_live == 0.0 or far_live == 0.0:
@@ -75,7 +82,6 @@ def render_live_dashboard():
                     st.metric(label="Stop Loss", value=f"₹{calc_sl:,.2f}")
                     
                 with c4:
-                    # Future integration logic for P&L based on entry price
                     pnl = 0 
                     st.metric(label="Live P&L", value=f"₹{pnl}")
                 
