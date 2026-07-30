@@ -22,6 +22,7 @@ def save_trade(pair, side, status, entry, target, sl):
               (pair, side, status, entry, target, sl, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     conn.commit()
     conn.close()
+
 def delete_trade(trade_id):
     """Deletes a specific trade from the database using its ID."""
     conn = get_db_connection()
